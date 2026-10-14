@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import './Contact.css'
+import { leadsApi } from '../../api'
 
 import heroStars from '../../assets/contact/hero-stars.jpg'
 import cardPhone from '../../assets/contact/card-phone.svg'
@@ -79,6 +80,8 @@ export default function Contact() {
   const [form, setForm] = useState(emptyForm)
   const [errors, setErrors] = useState({})
   const [sent, setSent] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [formError, setFormError] = useState('')
   const [openFaq, setOpenFaq] = useState(null)
 
   const onChange = (e) => {
@@ -87,16 +90,29 @@ export default function Contact() {
     if (errors[name]) setErrors((er) => ({ ...er, [name]: undefined }))
   }
 
-  const onSubmit = (e) => {
+  const onSubmit = async (e) => {
     e.preventDefault()
+    if (sending) return
     const errs = validate(form)
     setErrors(errs)
-    if (Object.keys(errs).length === 0) setSent(true)
+    setFormError('')
+    if (Object.keys(errs).length) return
+    setSending(true)
+    try {
+      await leadsApi.inquiry(form)
+      setSent(true)
+    } catch (err) {
+      setErrors(err.fields || {})
+      setFormError(Object.keys(err.fields || {}).length ? '' : err.message)
+    } finally {
+      setSending(false)
+    }
   }
 
   const reset = () => {
     setForm(emptyForm)
     setErrors({})
+    setFormError('')
     setSent(false)
   }
 
@@ -270,9 +286,10 @@ export default function Contact() {
                   {errors.message && <span className="ct-error">{errors.message}</span>}
                 </div>
 
-                <button type="submit" className="ct-submit">
+                {formError && <p className="ct-error" role="alert">{formError}</p>}
+                <button type="submit" className="ct-submit" disabled={sending}>
                   <img src={sendIcon} alt="" />
-                  Submit Inquiry
+                  {sending ? 'Sending…' : 'Submit Inquiry'}
                 </button>
               </form>
             )}

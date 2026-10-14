@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import SectionHead from './SectionHead'
+import { leadsApi } from '../../../api'
 import delhi from '../../../assets/home/contact-delhi.jpg'
 import icMail from '../../../assets/home/ct-mail.svg'
 import icPhone from '../../../assets/home/ct-phone.svg'
@@ -21,16 +22,29 @@ const EMPTY = { name: '', phone: '', email: '', service: '', message: '' }
 export default function ContactSection() {
   const [form, setForm] = useState(EMPTY)
   const [submitted, setSubmitted] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState('')
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
 
-  const onSubmit = (e) => {
+  const onSubmit = async (e) => {
     e.preventDefault()
-    setSubmitted(true)
+    if (sending) return
+    setError('')
+    setSending(true)
+    try {
+      await leadsApi.inquiry(form)
+      setSubmitted(true)
+    } catch (err) {
+      setError(Object.values(err.fields || {})[0] || err.message)
+    } finally {
+      setSending(false)
+    }
   }
 
   const reset = () => {
     setForm(EMPTY)
+    setError('')
     setSubmitted(false)
   }
 
@@ -119,9 +133,10 @@ export default function ContactSection() {
                     onChange={set('message')}
                   />
                 </label>
-                <button type="submit" className="hm-form__submit">
+                {error && <p className="hm-form__error" role="alert">{error}</p>}
+                <button type="submit" className="hm-form__submit" disabled={sending}>
                   <img src={icSend} alt="" />
-                  Submit Inquiry
+                  {sending ? 'Sending…' : 'Submit Inquiry'}
                 </button>
               </form>
             )}

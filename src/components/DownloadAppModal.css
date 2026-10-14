@@ -260,12 +260,12 @@
 .dm-otp {
   display: flex;
   justify-content: center;
-  gap: 12px;
+  gap: 8px;
   margin-top: 12px;
 }
 .dm-otp__box {
-  width: 56px;
-  height: 56px;
+  width: 46px;
+  height: 54px;
   min-width: 0;
   padding: 0;
   background: #f8f8f8;
@@ -375,6 +375,14 @@
 }
 
 @media (max-width: 360px) {
-  .dm-otp { gap: 8px; }
-  .dm-otp__box { width: 52px; height: 52px; }
+  .dm-otp { gap: 6px; }
+  .dm-otp__box { width: 40px; height: 48px; }
+}
+
+.dm-error {
+  margin: 12px 0 0;
+  color: #c8102e;
+  font-size: 13px;
+  line-height: 18px;
+  text-align: center;
 }

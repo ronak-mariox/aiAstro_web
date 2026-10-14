@@ -1184,6 +1184,8 @@
 }
 .hm-form__submit img { width: 20px; height: 20px; }
 .hm-form__submit:hover { opacity: 0.92; }
+.hm-form__submit:disabled { opacity: 0.6; cursor: default; }
+.hm-form__error { margin: 0; color: #c8102e; font-size: 13px; line-height: 18px; }
 .hm-form__done {
   display: flex;
   flex-direction: column;

@@ -6,14 +6,18 @@ import arrowIcon from '../assets/modal/arrow.svg'
 import verifyIcon from '../assets/modal/verify.svg'
 import successIcon from '../assets/modal/success.svg'
 import './DownloadAppModal.css'
+import { leadsApi } from '../api'
 
-const OTP_LEN = 4
+const OTP_LEN = 6
 const RESEND_SECONDS = 30
 
 const HEADINGS = {
   1: { title: 'Enter Your Number', sub: () => 'To talk to astrologer, get the Vedrashi app' },
   2: { title: 'Verify OTP', sub: (p) => `OTP sent to +91 ${p}` },
-  3: { title: 'Download Sent! 🎉', sub: () => 'App download link sent via SMS' },
+  3: {
+    title: (sent) => (sent ? 'Download Sent! 🎉' : 'Number Verified! 🎉'),
+    sub: (_p, sent) => (sent ? 'App download link sent via SMS' : 'Download the app from your store below'),
+  },
 }
 
 function StepIndicator({ step }) {
@@ -39,6 +43,10 @@ export default function DownloadAppModal({ onClose }) {
   const [phone, setPhone] = useState('')
   const [otp, setOtp] = useState(Array(OTP_LEN).fill(''))
   const [seconds, setSeconds] = useState(RESEND_SECONDS)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  // From the verify call: whether the link SMS went out, and the store links (Settings → General).
+  const [result, setResult] = useState({ linkSent: false, links: {} })
   const otpRefs = useRef([])
   const phoneRef = useRef(null)
 
@@ -72,17 +80,43 @@ export default function DownloadAppModal({ onClose }) {
     if (step === 2) otpRefs.current[0]?.focus()
   }, [step])
 
-  const sendOtp = (e) => {
-    e.preventDefault()
-    if (!phoneValid) return
-    setOtp(Array(OTP_LEN).fill(''))
-    setSeconds(RESEND_SECONDS)
-    setStep(2)
+  // Saves the number as a lead in the admin panel and texts it an OTP.
+  const requestOtp = async () => {
+    setBusy(true)
+    setError('')
+    try {
+      const res = await leadsApi.requestAppOtp(phone)
+      setOtp(Array(OTP_LEN).fill(''))
+      setSeconds(res.resendInSeconds || RESEND_SECONDS)
+      return true
+    } catch (err) {
+      setError(err.fields?.phone || err.message)
+      return false
+    } finally {
+      setBusy(false)
+    }
   }
 
-  const verifyOtp = (e) => {
+  const sendOtp = async (e) => {
     e.preventDefault()
-    if (otpComplete) setStep(3)
+    if (!phoneValid || busy) return
+    if (await requestOtp()) setStep(2)
+  }
+
+  const verifyOtp = async (e) => {
+    e.preventDefault()
+    if (!otpComplete || busy) return
+    setBusy(true)
+    setError('')
+    try {
+      const res = await leadsApi.verifyAppOtp(phone, otp.join(''))
+      setResult({ linkSent: Boolean(res.linkSent), links: res.links || {} })
+      setStep(3)
+    } catch (err) {
+      setError(err.fields?.code || err.message)
+    } finally {
+      setBusy(false)
+    }
   }
 
   const setOtpAt = (i, val) => {
@@ -136,14 +170,14 @@ export default function DownloadAppModal({ onClose }) {
     fillFrom(i, digits)
   }
 
-  const resend = () => {
-    setOtp(Array(OTP_LEN).fill(''))
-    setSeconds(RESEND_SECONDS)
-    otpRefs.current[0]?.focus()
+  const resend = async () => {
+    if (busy) return
+    if (await requestOtp()) otpRefs.current[0]?.focus()
   }
 
   const changeNumber = () => {
     setOtp(Array(OTP_LEN).fill(''))
+    setError('')
     setStep(1)
   }
 
@@ -160,8 +194,10 @@ export default function DownloadAppModal({ onClose }) {
             <img src={phoneIcon} alt="" />
           </div>
           <StepIndicator step={step} />
-          <h2 id="dm-title" className="dm-head__title">{head.title}</h2>
-          <p className="dm-head__sub">{head.sub(phone)}</p>
+          <h2 id="dm-title" className="dm-head__title">
+            {typeof head.title === 'function' ? head.title(result.linkSent) : head.title}
+          </h2>
+          <p className="dm-head__sub">{head.sub(phone, result.linkSent)}</p>
         </div>
 
         {step === 1 && (
@@ -185,8 +221,9 @@ export default function DownloadAppModal({ onClose }) {
             <div className="dm-note dm-note--amber">
               📲 You&apos;ll receive an OTP + app download link on this number. Standard SMS rates apply.
             </div>
-            <button type="submit" className="dm-btn" disabled={!phoneValid}>
-              Send OTP <img src={arrowIcon} alt="" />
+            {error && <p className="dm-error" role="alert">{error}</p>}
+            <button type="submit" className="dm-btn" disabled={!phoneValid || busy}>
+              {busy ? 'Sending…' : 'Send OTP'} <img src={arrowIcon} alt="" />
             </button>
             <p className="dm-fine">
               By continuing, you agree to our{' '}
@@ -198,7 +235,7 @@ export default function DownloadAppModal({ onClose }) {
 
         {step === 2 && (
           <form className="dm-body" onSubmit={verifyOtp} noValidate>
-            <p className="dm-label dm-label--center" id="dm-otp-label">Enter 4-digit OTP</p>
+            <p className="dm-label dm-label--center" id="dm-otp-label">Enter {OTP_LEN}-digit OTP</p>
             <div className="dm-otp" role="group" aria-labelledby="dm-otp-label">
               {otp.map((d, i) => (
                 <input
@@ -222,8 +259,9 @@ export default function DownloadAppModal({ onClose }) {
               <p>OTP sent to <strong>+91 {phone}</strong></p>
               <button type="button" className="dm-link" onClick={changeNumber}>Change number?</button>
             </div>
-            <button type="submit" className="dm-btn dm-btn--gap20" disabled={!otpComplete}>
-              Verify OTP <img src={verifyIcon} alt="" />
+            {error && <p className="dm-error" role="alert">{error}</p>}
+            <button type="submit" className="dm-btn dm-btn--gap20" disabled={!otpComplete || busy}>
+              {busy ? 'Verifying…' : 'Verify OTP'} <img src={verifyIcon} alt="" />
             </button>
             <p className="dm-fine dm-fine--gap20">
               {seconds > 0 ? (
@@ -241,20 +279,28 @@ export default function DownloadAppModal({ onClose }) {
               <img src={successIcon} alt="" />
             </div>
             <h3 className="dm-verified">Number Verified! 🎉</h3>
-            <p className="dm-verified__sub">App download link sent to <strong>+91 {phone}</strong></p>
-            <div className="dm-sms">
-              <p className="dm-sms__title">📲 SMS Sent!</p>
-              <p className="dm-sms__text">
-                &quot;Download Vedrashi — India&apos;s #1 astrology app. Get ₹100 off your first consultation: vedrashi.app/download&quot;
-              </p>
-            </div>
+            {result.linkSent ? (
+              <>
+                <p className="dm-verified__sub">App download link sent to <strong>+91 {phone}</strong></p>
+                <div className="dm-sms">
+                  <p className="dm-sms__title">📲 SMS Sent!</p>
+                  <p className="dm-sms__text">Open the SMS and tap the link to download the Vedrashi app.</p>
+                </div>
+              </>
+            ) : (
+              <p className="dm-verified__sub">Thanks! Get the Vedrashi app from your store:</p>
+            )}
             <div className="dm-stores">
-              <a className="dm-store" href="https://apps.apple.com/" target="_blank" rel="noreferrer">
-                <span aria-hidden="true">🍎</span> App Store
-              </a>
-              <a className="dm-store" href="https://play.google.com/store" target="_blank" rel="noreferrer">
-                <span aria-hidden="true">🤖</span> Play Store
-              </a>
+              {result.links.ios && (
+                <a className="dm-store" href={result.links.ios} target="_blank" rel="noreferrer">
+                  <span aria-hidden="true">🍎</span> App Store
+                </a>
+              )}
+              {result.links.android && (
+                <a className="dm-store" href={result.links.android} target="_blank" rel="noreferrer">
+                  <span aria-hidden="true">🤖</span> Play Store
+                </a>
+              )}
             </div>
             <button type="button" className="dm-btn dm-btn--done" onClick={onClose}>Done</button>
             <p className="dm-fine dm-fine--flush">

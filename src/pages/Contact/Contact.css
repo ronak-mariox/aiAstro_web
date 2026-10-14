@@ -558,3 +558,4 @@ a.ct-reach__item:hover .ct-reach__value { color: var(--red); }
   .ct-faq__q { padding: 16px; }
   .ct-faq__a { padding: 0 16px 16px; }
 }
+.ct-submit:disabled { opacity: 0.6; cursor: default; transform: none; }

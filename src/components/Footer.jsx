@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import logo from '../assets/layout/logo.png'
 import facebook from '../assets/layout/facebook.svg'
@@ -7,6 +8,7 @@ import twitter from '../assets/layout/twitter.svg'
 import whatsapp from '../assets/layout/whatsapp.svg'
 import send from '../assets/layout/send.svg'
 import './Footer.css'
+import { leadsApi } from '../api'
 
 const SOCIALS = [
   { icon: facebook, label: 'Facebook' },
@@ -68,12 +70,7 @@ export default function Footer() {
             ))}
           </div>
           <p className="footer__sub-title">Subscribe to cosmic updates</p>
-          <form className="footer__form" onSubmit={(e) => e.preventDefault()}>
-            <input type="email" placeholder="your@email.com" aria-label="Email" />
-            <button type="submit" aria-label="Subscribe">
-              <img src={send} alt="" width="16" height="16" />
-            </button>
-          </form>
+          <NewsletterForm />
         </div>
 
         {COLUMNS.map((col) => (
@@ -101,5 +98,49 @@ export default function Footer() {
         </div>
       </div>
     </footer>
+  )
+}
+
+function NewsletterForm() {
+  const [email, setEmail] = useState('')
+  const [state, setState] = useState({ busy: false, note: '', ok: false })
+
+  const onSubmit = async (e) => {
+    e.preventDefault()
+    if (state.busy) return
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setState({ busy: false, note: 'Enter a valid email.', ok: false })
+      return
+    }
+    setState({ busy: true, note: '', ok: false })
+    try {
+      await leadsApi.subscribe(email.trim())
+      setEmail('')
+      setState({ busy: false, note: 'Subscribed! Cosmic updates are on their way. ✨', ok: true })
+    } catch (err) {
+      setState({ busy: false, note: err.fields?.email || err.message, ok: false })
+    }
+  }
+
+  return (
+    <>
+      <form className="footer__form" onSubmit={onSubmit} noValidate>
+        <input
+          type="email"
+          placeholder="your@email.com"
+          aria-label="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+        <button type="submit" aria-label="Subscribe" disabled={state.busy}>
+          <img src={send} alt="" width="16" height="16" />
+        </button>
+      </form>
+      {state.note && (
+        <p className={`footer__note${state.ok ? '' : ' is-error'}`} role="status">
+          {state.note}
+        </p>
+      )}
+    </>
   )
 }
